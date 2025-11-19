@@ -1,0 +1,85 @@
+# ================================
+# Airflow
+# ================================
+
+# Pasta de logs do Airflow (recriada automaticamente)
+logs/
+*/logs/
+*.log
+
+# Arquivos criados automaticamente pelo scheduler
+**/scheduler/latest
+**/dag_processor_manager/latest
+
+# Arquivos de PID / temporários
+*.pid
+*.pid.lock
+
+# Diretórios de cache do Airflow
+airflow.cfg
+airflow.db
+webserver_config.py
+
+# ================================
+# Python
+# ================================
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pdb
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# ================================
+# Docker
+# ================================
+
+# Remove dados persistentes locais
+docker-data/
+data/
+tmp/
+
+# Arquivos de volumes do Docker
+**/volumes/
+**/data/
+**/tmp/
+
+# ================================
+# Sistema operacional
+# ================================
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ================================
+# IDEs / Editores
+# ================================
+
+# VSCode
+.vscode/
+
+# PyCharm
+.idea/
+
+# ================================
+# Git
+# ================================
+
+# Ignora arquivos resultantes de conflitos
+*.orig
