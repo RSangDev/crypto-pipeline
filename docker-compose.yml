@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
-      POSTGRES_DB: airflow
+      POSTGRES_DB: crypto
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -26,6 +26,8 @@ services:
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
+      - ./tmp:/opt/airflow/tmp
+
     ports:
       - "8080:8080"
 
@@ -44,6 +46,8 @@ services:
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
+      - ./tmp:/opt/airflow/tmp
+
 
 volumes:
   postgres_data:
