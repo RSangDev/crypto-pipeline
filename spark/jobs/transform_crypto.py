@@ -1,5 +1,5 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col
+from pyspark.sql.functions import col, current_timestamp
 
 # Cria SparkSession
 spark = SparkSession.builder.appName("TransformCrypto").getOrCreate()
@@ -13,21 +13,21 @@ df = spark.read.format("jdbc").options(
     password="airflow"
 ).load()
 
-# Seleciona e renomeia colunas
+# Adiciona coluna de data (processamento)
 df_clean = df \
-    .withColumn("date", col("datetime")) \
+    .withColumn("date", current_timestamp()) \
     .withColumn("price_usd", col("close")) \
-    .select("date", "price_usd")
+    .select("date", "price_usd")  # Apenas o que queremos no curated
 
 # Escreve direto no Postgres na tabela curated_crypto
 df_clean.write \
     .format("jdbc") \
     .option("url", "jdbc:postgresql://postgres:5432/crypto") \
-    .option("driver", "org.postgresql.Driver") \
     .option("dbtable", "curated_crypto") \
     .option("user", "airflow") \
     .option("password", "airflow") \
-    .mode("overwrite").save() # sobrescreve a tabela
-    
+    .option("driver", "org.postgresql.Driver") \
+    .mode("overwrite") \
+    .save()
 
 print("Transformação Spark concluída!")

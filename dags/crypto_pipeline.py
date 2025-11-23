@@ -1,6 +1,7 @@
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
+from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 from datetime import datetime
 import pandas as pd
 import psycopg2
@@ -36,6 +37,23 @@ def create_table():
             rsi FLOAT
         );
     """)
+    
+    cursor.execute("""
+    INSERT INTO raw_crypto (
+        asset, timestamp, open, close, low, high, volume,
+        sma7, sma25, sma99, bb_bbm, bb_bbh, bb_bbl, psar, rsi
+    )
+    VALUES (
+        %s, TO_TIMESTAMP(%s), %s, %s, %s, %s, %s,
+        %s, %s, %s, %s, %s, %s, %s, %s
+    )
+""", (
+    row["asset"], row["timestamp"], row["open"], row["close"],
+    row["low"], row["high"], row["volume"], row.get("sma7"),
+    row.get("sma25"), row.get("sma99"), row.get("bb_bbm"),
+    row.get("bb_bbh"), row.get("bb_bbl"), row.get("psar"), row.get("rsi")
+))
+
 
     conn.commit()
     cursor.close()
@@ -56,7 +74,6 @@ def load_raw_to_postgres():
             continue
 
         print("Carregando arquivo:", filename)
-
         df = pd.read_csv(f"{RAW_DIR}/{filename}")
 
         # Remover coluna inútil
@@ -65,7 +82,6 @@ def load_raw_to_postgres():
         
         # Adicionar o nome do ativo baseado no nome do arquivo
         asset = filename.replace(".csv", "")
-
         df["asset"] = asset
 
         # Renomear para snake_case
@@ -77,7 +93,6 @@ def load_raw_to_postgres():
             "sma7", "sma25", "sma99", "bb_bbm", "bb_bbh", "bb_bbl",
             "psar", "rsi"
         ]
-
         for col in expected_cols:
             if col not in df.columns:
                 df[col] = None
@@ -104,7 +119,6 @@ def load_raw_to_postgres():
     conn.commit()
     cursor.close()
     conn.close()
-
 
 
 with DAG(
@@ -134,4 +148,21 @@ with DAG(
         python_callable=load_raw_to_postgres
     )
 
-    make_tmp_dir >> download_zip >> create_table_task >> load_raw
+
+    transform_crypto = SparkSubmitOperator(
+        task_id="transform_crypto",
+        application="/opt/airflow/spark/jobs/transform_crypto.py",
+        conn_id="spark_default",
+        conf={"spark.master": "local[*]"},
+        spark_binary="/opt/spark/bin/spark-submit",
+        name="crypto_transform"
+    )
+
+
+
+
+
+
+
+
+    make_tmp_dir >> download_zip >> create_table_task >> load_raw >> transform_crypto

@@ -7,29 +7,31 @@ services:
       POSTGRES_DB: crypto
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+
     ports:
       - "5432:5432"
 
   airflow-webserver:
     build: ./airflow
     command: >
-      bash -c "
-        airflow db migrate &&
-        airflow webserver
-      "
+      bash /opt/airflow/airflow-init.sh
     depends_on:
       - postgres
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/crypto
       AIRFLOW__WEBSERVER__SECRET_KEY: secretkey123
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
       - ./tmp:/opt/airflow/tmp
+      - ./spark/jobs:/opt/airflow/spark/jobs
+      - ./airflow-init.sh:/opt/airflow/airflow-init.sh
 
     ports:
       - "8080:8080"
+
 
   airflow-scheduler:
     build: ./airflow
@@ -42,11 +44,13 @@ services:
       - airflow-webserver
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/crypto
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
       - ./tmp:/opt/airflow/tmp
+      - ./spark/jobs:/opt/airflow/spark/jobs
+
 
 
 volumes:
