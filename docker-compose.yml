@@ -22,6 +22,7 @@ services:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/crypto
       AIRFLOW__WEBSERVER__SECRET_KEY: secretkey123
+      
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
@@ -45,6 +46,7 @@ services:
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/crypto
+      
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs

@@ -8,6 +8,12 @@ import psycopg2
 import os
 
 RAW_DIR = "/opt/airflow/tmp"
+EXPECTED_COLS = [
+    "asset", "open", "close", "low", "high", "volume",
+    "sma7", "sma25", "sma99", "bb_bbm", "bb_bbh", "bb_bbl",
+    "psar", "rsi"
+]
+
 
 def create_table():
     conn = psycopg2.connect(
@@ -18,46 +24,40 @@ def create_table():
     )
     cursor = conn.cursor()
 
+    cursor.execute("DROP TABLE IF EXISTS raw_crypto;")  # 👈 Adicionado
+
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS raw_crypto (
             asset TEXT,
-            timestamp INT,
-            open FLOAT,
-            close FLOAT,
-            low FLOAT,
-            high FLOAT,
-            volume FLOAT,
-            sma7 FLOAT,
-            sma25 FLOAT,
-            sma99 FLOAT,
-            bb_bbm FLOAT,
-            bb_bbh FLOAT,
-            bb_bbl FLOAT,
-            psar FLOAT,
-            rsi FLOAT
+            timestamp TEXT,
+            open TEXT,
+            close TEXT,
+            low TEXT,
+            high TEXT,
+            volume TEXT,
+            sma7 TEXT,
+            sma25 TEXT,
+            sma99 TEXT,
+            bb_bbm TEXT,
+            bb_bbh TEXT,
+            bb_bbl TEXT,
+            psar TEXT,
+            rsi TEXT
         );
     """)
-    
-    cursor.execute("""
-    INSERT INTO raw_crypto (
-        asset, timestamp, open, close, low, high, volume,
-        sma7, sma25, sma99, bb_bbm, bb_bbh, bb_bbl, psar, rsi
-    )
-    VALUES (
-        %s, TO_TIMESTAMP(%s), %s, %s, %s, %s, %s,
-        %s, %s, %s, %s, %s, %s, %s, %s
-    )
-""", (
-    row["asset"], row["timestamp"], row["open"], row["close"],
-    row["low"], row["high"], row["volume"], row.get("sma7"),
-    row.get("sma25"), row.get("sma99"), row.get("bb_bbm"),
-    row.get("bb_bbh"), row.get("bb_bbl"), row.get("psar"), row.get("rsi")
-))
-
 
     conn.commit()
     cursor.close()
     conn.close()
+
+
+def to_float(val):
+    """ Converte valores numéricos ou retorna None """
+    try:
+        return float(val)
+    except:
+        return None
 
 
 def load_raw_to_postgres():
@@ -76,37 +76,35 @@ def load_raw_to_postgres():
         print("Carregando arquivo:", filename)
         df = pd.read_csv(f"{RAW_DIR}/{filename}")
 
-        # Remover coluna inútil
+        # Remove coluna inútil do Kaggle
         if "Unnamed: 0" in df.columns:
             df = df.drop(columns=["Unnamed: 0"])
-        
-        # Adicionar o nome do ativo baseado no nome do arquivo
+
+        # Nome do ativo
         asset = filename.replace(".csv", "")
         df["asset"] = asset
 
-        # Renomear para snake_case
+        # snake_case
         df.columns = [c.lower() for c in df.columns]
 
-        # Forçar presença das colunas esperadas
-        expected_cols = [
-            "asset", "open", "close", "low", "high", "volume",
-            "sma7", "sma25", "sma99", "bb_bbm", "bb_bbh", "bb_bbl",
-            "psar", "rsi"
-        ]
-        for col in expected_cols:
+        # Força colunas esperadas; se faltar, vira string vazia
+        for col in EXPECTED_COLS:
             if col not in df.columns:
-                df[col] = None
+                df[col] = ""
 
-        # Criar timestamp incremental
-        df["timestamp"] = range(len(df))
+        # Converte TODO mundo para string (mantendo RAW)
+        df = df.astype(str)
 
-        # Reordena para o INSERT
+        # Cria timestamp incremental como string
+        df["timestamp"] = df.index.astype(str)
+
+        # Ordena colunas
         df = df[[
             "asset", "timestamp", "open", "close", "low", "high", "volume",
             "sma7", "sma25", "sma99", "bb_bbm", "bb_bbh", "bb_bbl", "psar", "rsi"
         ]]
 
-        # Inserir linha por linha
+        # Insere linha a linha
         for _, row in df.iterrows():
             cursor.execute("""
                 INSERT INTO raw_crypto (
@@ -119,6 +117,7 @@ def load_raw_to_postgres():
     conn.commit()
     cursor.close()
     conn.close()
+
 
 
 with DAG(
@@ -148,18 +147,14 @@ with DAG(
         python_callable=load_raw_to_postgres
     )
 
-
     transform_crypto = SparkSubmitOperator(
-        task_id="transform_crypto",
-        application="/opt/airflow/spark/jobs/transform_crypto.py",
-        conn_id="spark_default",
-        conf={"spark.master": "local[*]"},
-        spark_binary="/opt/spark/bin/spark-submit",
-        name="crypto_transform"
+        task_id='transform_crypto',
+        application='/opt/airflow/spark/jobs/transform_crypto.py',
+        name='crypto_transform',
+        verbose=True,
+        conf={"spark.master": "local[*]"},  # 👈 aqui definimos o modo local
+        dag=dag,
     )
-
-
-
 
 
 
