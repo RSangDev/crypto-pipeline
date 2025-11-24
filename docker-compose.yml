@@ -22,6 +22,9 @@ services:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/crypto
       AIRFLOW__WEBSERVER__SECRET_KEY: secretkey123
+      # ⇣⇣⇣ AQUI ⇣⇣⇣ (adiciona essas duas linhas)
+      AIRFLOW_CONN_SPARK_LOCAL: "spark://local[*]"
+      _PIP_ADDITIONAL_REQUIREMENTS: "${_PIP_ADDITIONAL_REQUIREMENTS:-} apache-airflow-providers-apache-spark"
       
     volumes:
       - ./dags:/opt/airflow/dags
@@ -39,6 +42,7 @@ services:
     command: >
       bash -c "
         airflow db migrate &&
+        airflow connections add spark_local --conn-type spark --conn-host 'local[*]' || true &&
         airflow scheduler
       "
     depends_on:
@@ -46,6 +50,9 @@ services:
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/crypto
+        # ⇣⇣⇣ AQUI TAMBÉM ⇣⇣⇣ (mesmas duas linhas)
+      AIRFLOW_CONN_SPARK_LOCAL: "spark://local[*]"
+      _PIP_ADDITIONAL_REQUIREMENTS: "${_PIP_ADDITIONAL_REQUIREMENTS:-} apache-airflow-providers-apache-spark"
       
     volumes:
       - ./dags:/opt/airflow/dags
