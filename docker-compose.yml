@@ -7,46 +7,77 @@ services:
       POSTGRES_DB: crypto
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+
     ports:
       - "5432:5432"
 
   airflow-webserver:
     build: ./airflow
     command: >
-      bash -c "
-        airflow db migrate &&
-        airflow webserver
-      "
+      bash /opt/airflow/airflow-init.sh
     depends_on:
       - postgres
-    environment:
+    environment:      
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/crypto
       AIRFLOW__WEBSERVER__SECRET_KEY: secretkey123
+      # ⇣⇣⇣ AQUI ⇣⇣⇣ (adiciona essas duas linhas)
+      AIRFLOW_CONN_SPARK_LOCAL: "spark://local[*]"
+      _PIP_ADDITIONAL_REQUIREMENTS: "${_PIP_ADDITIONAL_REQUIREMENTS:-} apache-airflow-providers-apache-spark"
+      MB_USER: "rafasanglard@gmail.com"
+      MB_PASS: "UQBy4yaj2df4XTA"
+      
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
       - ./tmp:/opt/airflow/tmp
+      - ./spark/jobs:/opt/airflow/spark/jobs
+      - ./airflow-init.sh:/opt/airflow/airflow-init.sh
 
     ports:
       - "8080:8080"
+
 
   airflow-scheduler:
     build: ./airflow
     command: >
       bash -c "
         airflow db migrate &&
+        airflow connections add spark_local --conn-type spark --conn-host 'local[*]' || true &&
         airflow scheduler
       "
     depends_on:
       - airflow-webserver
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/crypto
+        # ⇣⇣⇣ AQUI TAMBÉM ⇣⇣⇣ (mesmas duas linhas)
+      AIRFLOW_CONN_SPARK_LOCAL: "spark://local[*]"
+      _PIP_ADDITIONAL_REQUIREMENTS: "${_PIP_ADDITIONAL_REQUIREMENTS:-} apache-airflow-providers-apache-spark"
+      MB_USER: "rafasanglard@gmail.com"
+      MB_PASS: "UQBy4yaj2df4XTA"
+      
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
       - ./tmp:/opt/airflow/tmp
+      - ./spark/jobs:/opt/airflow/spark/jobs
+
+  metabase:
+    image: metabase/metabase
+    ports:
+      - "3000:3000"
+    environment:
+      MB_USER: "rafasanglard@gmail.com"
+      MB_PASS: "UQBy4yaj2df4XTA"
+      MB_DB_FILE: /metabase.db
+      MB_ENABLE_API: "true"
+      MB_ENABLE_PUBLIC_SHARING: "true"
+    volumes:
+      - ./metabase-data:/metabase.db
+
+
 
 
 volumes:

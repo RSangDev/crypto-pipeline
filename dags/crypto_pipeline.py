@@ -1,13 +1,27 @@
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
+from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
+
 from datetime import datetime
+import os
 import pandas as pd
 import psycopg2
-import os
+import sys
+sys.path.append("/opt/airflow/spark/jobs")
 
+from metabase_dashboard import create_dashboard_safe as create_dashboard
+
+
+# ----------------------- CONFIGURAÇÕES -----------------------
 RAW_DIR = "/opt/airflow/tmp"
+EXPECTED_COLS = [
+    "asset", "open", "close", "low", "high", "volume",
+    "sma7", "sma25", "sma99", "bb_bbm", "bb_bbh", "bb_bbl",
+    "psar", "rsi"
+]
 
+# ----------------------- FUNÇÕES PYTHON -----------------------
 def create_table():
     conn = psycopg2.connect(
         host="postgres",
@@ -15,30 +29,29 @@ def create_table():
         user="airflow",
         password="airflow"
     )
-    cursor = conn.cursor()
-
-    cursor.execute("""
+    cur = conn.cursor()
+    cur.execute("DROP TABLE IF EXISTS raw_crypto;")
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS raw_crypto (
             asset TEXT,
-            timestamp INT,
-            open FLOAT,
-            close FLOAT,
-            low FLOAT,
-            high FLOAT,
-            volume FLOAT,
-            sma7 FLOAT,
-            sma25 FLOAT,
-            sma99 FLOAT,
-            bb_bbm FLOAT,
-            bb_bbh FLOAT,
-            bb_bbl FLOAT,
-            psar FLOAT,
-            rsi FLOAT
+            timestamp TEXT,
+            open TEXT,
+            close TEXT,
+            low TEXT,
+            high TEXT,
+            volume TEXT,
+            sma7 TEXT,
+            sma25 TEXT,
+            sma99 TEXT,
+            bb_bbm TEXT,
+            bb_bbh TEXT,
+            bb_bbl TEXT,
+            psar TEXT,
+            rsi TEXT
         );
     """)
-
     conn.commit()
-    cursor.close()
+    cur.close()
     conn.close()
 
 
@@ -49,89 +62,109 @@ def load_raw_to_postgres():
         user="airflow",
         password="airflow"
     )
-    cursor = conn.cursor()
+    cur = conn.cursor()
+
+    insert_sql = """
+        INSERT INTO raw_crypto (
+            asset, timestamp, open, close, low, high, volume,
+            sma7, sma25, sma99, bb_bbm, bb_bbh, bb_bbl, psar, rsi
+        ) VALUES (
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+        )
+    """
 
     for filename in os.listdir(RAW_DIR):
         if not filename.endswith(".csv"):
             continue
 
-        print("Carregando arquivo:", filename)
+        filepath = os.path.join(RAW_DIR, filename)
+        print(f"Carregando arquivo: {filename}")
 
-        df = pd.read_csv(f"{RAW_DIR}/{filename}")
+        df = pd.read_csv(filepath)
 
-        # Remover coluna inútil
+        # Remove coluna inútil do Kaggle
         if "Unnamed: 0" in df.columns:
             df = df.drop(columns=["Unnamed: 0"])
-        
-        # Adicionar o nome do ativo baseado no nome do arquivo
-        asset = filename.replace(".csv", "")
 
+        asset = filename.replace(".csv", "").upper()
         df["asset"] = asset
+        df.columns = [c.lower().replace(" ", "_") for c in df.columns]
 
-        # Renomear para snake_case
-        df.columns = [c.lower() for c in df.columns]
-
-        # Forçar presença das colunas esperadas
-        expected_cols = [
-            "asset", "open", "close", "low", "high", "volume",
-            "sma7", "sma25", "sma99", "bb_bbm", "bb_bbh", "bb_bbl",
+        # Garante exatamente as colunas esperadas (na ordem correta!)
+        df = df.reindex(columns=[
+            "open", "close", "high", "low", "volume",
+            "sma7", "sma25", "sma99",
+            "bb_bbm", "bb_bbh", "bb_bbl",
             "psar", "rsi"
-        ]
+        ], fill_value="")
 
-        for col in expected_cols:
-            if col not in df.columns:
-                df[col] = None
+        # Adiciona asset e timestamp
+        df.insert(0, "asset", asset)
+        df.insert(1, "timestamp", df.index.astype(str))
 
-        # Criar timestamp incremental
-        df["timestamp"] = range(len(df))
+        # Converte tudo pra string (RAW)
+        df = df.astype(str)
 
-        # Reordena para o INSERT
-        df = df[[
-            "asset", "timestamp", "open", "close", "low", "high", "volume",
-            "sma7", "sma25", "sma99", "bb_bbm", "bb_bbh", "bb_bbl", "psar", "rsi"
-        ]]
-
-        # Inserir linha por linha
-        for _, row in df.iterrows():
-            cursor.execute("""
-                INSERT INTO raw_crypto (
-                    asset, timestamp, open, close, low, high, volume,
-                    sma7, sma25, sma99, bb_bbm, bb_bbh, bb_bbl, psar, rsi
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, tuple(row))
+        # Insere em lote (muito mais rápido e seguro)
+        records = df.values.tolist()
+        cur.executemany(insert_sql, records)
 
     conn.commit()
-    cursor.close()
+    cur.close()
     conn.close()
-
-
-
+    print("Todos os arquivos carregados com sucesso no PostgreSQL!")
+# ----------------------- DAG -----------------------
 with DAG(
-    "crypto_pipeline_docker",
+    dag_id="crypto_pipeline_docker",
     start_date=datetime(2025, 1, 1),
-    schedule_interval=None,
-    catchup=False
+    schedule="@once",
+    catchup=False,
+    tags=["crypto", "spark", "kaggle"],
 ) as dag:
 
     make_tmp_dir = BashOperator(
         task_id="make_tmp_dir",
-        bash_command="mkdir -p /opt/airflow/tmp"
+        bash_command="""
+            mkdir -p /opt/airflow/tmp
+            # Não precisamos mais do chmod 777 → o volume já está montado com permissão correta
+        """.strip(),
     )
 
-    download_zip = BashOperator(
+    download_dataset = BashOperator(
         task_id="download_dataset",
-        bash_command="kaggle datasets download -d nandodmelo/cripto-hour -p /opt/airflow/tmp --unzip"
+        bash_command="kaggle datasets download -d nandodmelo/cripto-hour -p /opt/airflow/tmp --unzip",
     )
 
     create_table_task = PythonOperator(
         task_id="create_table",
-        python_callable=create_table
+        python_callable=create_table,
     )
 
     load_raw = PythonOperator(
         task_id="load_raw",
-        python_callable=load_raw_to_postgres
+        python_callable=load_raw_to_postgres,
     )
 
-    make_tmp_dir >> download_zip >> create_table_task >> load_raw
+        # TASK SPARK – VERSÃO CORRETA PARA AIRFLOW 2.9+ (2025)
+    transform_crypto = SparkSubmitOperator(
+        task_id="transform_crypto",
+        conn_id="spark_local",  # <- Isso força local[*] sem default yarn
+        application="/opt/airflow/spark/jobs/transform_crypto.py",
+        name="Crypto-Transform-Local",
+        verbose=True,
+        env_vars={
+            "PYSPARK_PYTHON": "/usr/local/bin/python3",  # Garante Python correto
+            "SPARK_HOME": "/opt/spark"  # Se precisar, ajuste pro seu path
+        },
+    )
+    dashboard_task = PythonOperator(
+        task_id="create_metabase_dashboard",
+        python_callable=create_dashboard,
+        op_kwargs={
+            "token": os.getenv("MB_API_TOKEN")
+        },
+        dag=dag,
+    )
+
+    # ----------------------- DEPENDÊNCIAS -----------------------
+    make_tmp_dir >> download_dataset >> create_table_task >> load_raw >> transform_crypto >> dashboard_task

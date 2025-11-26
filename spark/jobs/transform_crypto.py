@@ -1,10 +1,8 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col
+from pyspark.sql.functions import col, round
 
-# Cria SparkSession
 spark = SparkSession.builder.appName("TransformCrypto").getOrCreate()
 
-# Lê dados RAW diretamente do Postgres
 df = spark.read.format("jdbc").options(
     url="jdbc:postgresql://postgres:5432/crypto",
     driver="org.postgresql.Driver",
@@ -12,22 +10,38 @@ df = spark.read.format("jdbc").options(
     user="airflow",
     password="airflow"
 ).load()
+spark.sql("DROP TABLE IF EXISTS curated_crypto")
 
-# Seleciona e renomeia colunas
-df_clean = df \
-    .withColumn("date", col("datetime")) \
-    .withColumn("price_usd", col("close")) \
-    .select("date", "price_usd")
 
-# Escreve direto no Postgres na tabela curated_crypto
-df_clean.write \
+decimal_cols = ["close", "volume", "sma7", "sma25", "sma99",
+                "bb_bbm", "bb_bbh", "bb_bbl", "psar", "rsi"]
+
+# Seleciona colunas
+df_curated = df.select(
+    col("timestamp").alias("date"),
+    col("asset"),
+    col("close").alias("price_usd"),
+    col("volume"),
+    "sma7", "sma25", "sma99",
+    "bb_bbm", "bb_bbh", "bb_bbl",
+    "psar", "rsi"
+)
+
+# Formata para duas casas decimais
+for c in decimal_cols:
+    if c in df_curated.columns:  # garante que a coluna existe
+        df_curated = df_curated.withColumn(c, round(col(c), 2))
+
+
+
+df_curated.write \
     .format("jdbc") \
     .option("url", "jdbc:postgresql://postgres:5432/crypto") \
-    .option("driver", "org.postgresql.Driver") \
     .option("dbtable", "curated_crypto") \
     .option("user", "airflow") \
     .option("password", "airflow") \
-    .mode("overwrite").save() # sobrescreve a tabela
-    
+    .option("driver", "org.postgresql.Driver") \
+    .mode("overwrite") \
+    .save()
 
-print("Transformação Spark concluída!")
+print("Curated finalizada com sucesso!")
