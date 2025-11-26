@@ -2,10 +2,16 @@ from airflow import DAG
 from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
+
 from datetime import datetime
 import os
 import pandas as pd
 import psycopg2
+import sys
+sys.path.append("/opt/airflow/spark/jobs")
+
+from metabase_dashboard import create_dashboard_safe as create_dashboard
+
 
 # ----------------------- CONFIGURAÇÕES -----------------------
 RAW_DIR = "/opt/airflow/tmp"
@@ -151,6 +157,14 @@ with DAG(
             "SPARK_HOME": "/opt/spark"  # Se precisar, ajuste pro seu path
         },
     )
+    dashboard_task = PythonOperator(
+        task_id="create_metabase_dashboard",
+        python_callable=create_dashboard,
+        op_kwargs={
+            "token": os.getenv("MB_API_TOKEN")
+        },
+        dag=dag,
+    )
 
     # ----------------------- DEPENDÊNCIAS -----------------------
-    make_tmp_dir >> download_dataset >> create_table_task >> load_raw >> transform_crypto
+    make_tmp_dir >> download_dataset >> create_table_task >> load_raw >> transform_crypto >> dashboard_task

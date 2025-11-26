@@ -18,13 +18,15 @@ services:
       bash /opt/airflow/airflow-init.sh
     depends_on:
       - postgres
-    environment:
+    environment:      
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/crypto
       AIRFLOW__WEBSERVER__SECRET_KEY: secretkey123
       # ⇣⇣⇣ AQUI ⇣⇣⇣ (adiciona essas duas linhas)
       AIRFLOW_CONN_SPARK_LOCAL: "spark://local[*]"
       _PIP_ADDITIONAL_REQUIREMENTS: "${_PIP_ADDITIONAL_REQUIREMENTS:-} apache-airflow-providers-apache-spark"
+      MB_USER: "rafasanglard@gmail.com"
+      MB_PASS: "UQBy4yaj2df4XTA"
       
     volumes:
       - ./dags:/opt/airflow/dags
@@ -53,6 +55,8 @@ services:
         # ⇣⇣⇣ AQUI TAMBÉM ⇣⇣⇣ (mesmas duas linhas)
       AIRFLOW_CONN_SPARK_LOCAL: "spark://local[*]"
       _PIP_ADDITIONAL_REQUIREMENTS: "${_PIP_ADDITIONAL_REQUIREMENTS:-} apache-airflow-providers-apache-spark"
+      MB_USER: "rafasanglard@gmail.com"
+      MB_PASS: "UQBy4yaj2df4XTA"
       
     volumes:
       - ./dags:/opt/airflow/dags
@@ -65,7 +69,11 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - MB_DB_FILE=/metabase.db
+      MB_USER: "rafasanglard@gmail.com"
+      MB_PASS: "UQBy4yaj2df4XTA"
+      MB_DB_FILE: /metabase.db
+      MB_ENABLE_API: "true"
+      MB_ENABLE_PUBLIC_SHARING: "true"
     volumes:
       - ./metabase-data:/metabase.db
 
