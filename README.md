@@ -22,17 +22,22 @@ Resultado final: tabela tratada e pronta para analytics.
 
 ## Como Executar o Projeto
 1) Clonar o repositório
-```bash
+ ```bash
+
 git clone https://github.com/SEU_USUARIO/crypto-pipeline.git
+
+
 cd crypto-pipeline
+```
 
-2) Subir os serviços
-```bash
+3) Subir os serviços
+  ```bash
+
 docker compose up -d --build
-
-3) Acessar o Airflow:
+4) Acessar o Airflow:
 ```bash
 URL: http://localhost:8080
+```
 
 Usuário/Senha: airflow / airflow
 
@@ -40,3 +45,26 @@ Usuário/Senha: airflow / airflow
 ```bash
 
 DAG: crypto_pipeline_docker
+```
+5) Acessar a porta do Metabase em:
+```bash
+
+URL: http://localhost:3000
+```
+7) Fazer Login no metabase
+   Usuário/Senha: rafasanglard@gmail.com / UQBy4yaj2df4XTA
+
+
+9) Acessar Our analytics pelo menu lateral, ou usar a URL
+  ```bash
+
+http://localhost:3000/collection/root
+
+Encontrar preco-criptomoeda 
+```
+
+OU
+```bash
+
+Em database > crypto> curatec_crypto
+```
