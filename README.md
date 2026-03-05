@@ -52,7 +52,9 @@ DAG: crypto_pipeline_docker
 URL: http://localhost:3000
 ```
 7) Fazer Login no metabase
-   Usuário/Senha: rafasanglard@gmail.com / UQBy4yaj2df4XTA
+  
+Usuário: admin@example.com
+Senha: admin123
 
 
 9) Acessar Our analytics pelo menu lateral, ou usar a URL
