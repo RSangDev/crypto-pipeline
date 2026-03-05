@@ -24,7 +24,7 @@ Resultado final: tabela tratada e pronta para analytics.
 1) Clonar o repositório
  ```bash
 
-git clone https://github.com/SEU_USUARIO/crypto-pipeline.git
+git clone https://github.com/RSangDev/crypto-pipeline.git
 
 
 cd crypto-pipeline
